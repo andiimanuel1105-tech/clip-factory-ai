@@ -1,67 +1,180 @@
 index.html
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLIP FACTORY AI</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#090909;color:white;font-family:Arial,sans-serif;padding:20px}
-header{text-align:center;padding:25px 0}
-h1{color:#ff3030;font-size:28px;letter-spacing:2px}
-.subtitle{color:#999;font-size:13px}
-.card{background:#171717;border:1px solid #303030;border-radius:14px;padding:18px;margin:15px 0}
+body{margin:0;background:#090909;color:#fff;font-family:Arial,sans-serif;padding:16px}
+header{text-align:center;padding:22px 0}
+h1{color:#ff3030;letter-spacing:2px;font-size:27px}
+.subtitle{color:#aaa;font-size:12px}
+.card{background:#171717;border:1px solid #333;border-radius:14px;padding:17px;margin:15px 0}
 h2{font-size:17px}
-input{width:100%;padding:14px;background:#080808;border:1px solid #444;border-radius:8px;color:white;margin:10px 0}
-button{width:100%;padding:14px;background:#e32636;border:0;border-radius:8px;color:white;font-weight:bold;margin-top:12px}
-button:active{background:#a71925}
-.small{color:#999;font-size:12px;line-height:1.5}
-.status{color:#35d07f;font-size:13px}
+p{line-height:1.5}
+.small{font-size:12px;color:#aaa}
+input[type=file]{width:100%;margin:15px 0;color:#ddd}
+input[type=url]{width:100%;padding:13px;background:#080808;color:white;border:1px solid #444;border-radius:8px}
+button{width:100%;padding:13px;background:#e32636;color:white;border:0;border-radius:8px;font-weight:bold;margin-top:10px}
+button.secondary{background:#333}
+button:disabled{opacity:.4}
+video{width:100%;border-radius:10px;margin-top:12px;background:#000}
+.status{color:#43d68b;font-size:13px}
+.clip{background:#222;border:1px solid #444;border-radius:10px;padding:13px;margin:12px 0}
+.clip button{width:48%;display:inline-block}
+.approved{color:#43d68b}
+.rejected{color:#ff7777}
+.stat{display:flex;justify-content:space-between;color:#bbb;padding:7px 0}
 </style>
 </head>
 <body>
+
 <header>
 <h1>CLIP FACTORY AI</h1>
 <div class="subtitle">TU ESTUDIO INTELIGENTE DE CLIPS</div>
+<p class="small">Crea · Recorta · Aprueba · Publica</p>
 </header>
 
 <div class="card">
-<h2>🎬 Crear nuevos clips</h2>
-<p class="small">Añade un video o una transmisión que tengas autorización para utilizar.</p>
-<input type="file" id="video" accept="video/*">
-<input type="url" id="url" placeholder="Enlace de tu video autorizado">
-<label class="small">
-<input type="checkbox" id="permission" style="width:auto">
-Confirmo que tengo autorización para usar este contenido.
-</label>
-<button onclick="prepare()">ANALIZAR CONTENIDO</button>
+<h2>🎬 1. Añadir video</h2>
+<p class="small">Selecciona un video guardado en tu iPhone.</p>
+<input type="file" id="videoFile" accept="video/*">
+<video id="preview" controls playsinline hidden></video>
+<p id="videoInfo" class="small">Ningún video seleccionado.</p>
+</div>
+
+<div class="card">
+<h2>⚙️ 2. Configuración</h2>
+<div class="stat"><span>Máximo de clips</span><b>10</b></div>
+<div class="stat"><span>Formato</span><b>9:16 vertical</b></div>
+<div class="stat"><span>Publicación</span><b>Manual</b></div>
+<div class="stat"><span>Presupuesto</span><b>RD$0</b></div>
+</div>
+
+<div class="card">
+<h2>✂️ 3. Preparar propuestas de clips</h2>
+<p class="small">Esta primera versión divide la duración en segmentos de referencia. Todavía no detecta momentos mediante IA.</p>
+<button id="analyze" onclick="prepareClips()" disabled>PREPARAR CLIPS</button>
 <p id="status" class="status"></p>
 </div>
 
 <div class="card">
-<h2>⚙️ Configuración</h2>
-<p>Máximo de clips: <strong>10</strong></p>
-<p>Formato: <strong>Vertical 9:16</strong></p>
-<p>Publicación: <strong>Manual con aprobación</strong></p>
-<p>Estado: <strong>Modo gratuito</strong></p>
-</div>
-
-<div class="card">
-<h2>✂️ Tus clips</h2>
-<p class="small" id="clips">Todavía no hay clips generados.</p>
+<h2>📂 4. Revisar y aprobar</h2>
+<p class="small">Aprueba o rechaza cada propuesta antes de continuar.</p>
+<div id="clips" class="small">Todavía no hay propuestas.</div>
 </div>
 
 <script>
-function prepare(){
-const file=document.getElementById('video').files[0];
-const url=document.getElementById('url').value;
-const permission=document.getElementById('permission').checked;
-const status=document.getElementById('status');
-if(!permission){status.textContent='Debes confirmar que tienes autorización.';return;}
-if(!file&&!url){status.textContent='Selecciona un video o introduce un enlace.';return;}
-status.textContent='Contenido registrado. El motor de análisis se conectará en la siguiente etapa.';
+let duration=0;
+let clipList=[];
+let videoURL=null;
+
+const fileInput=document.getElementById('videoFile');
+const preview=document.getElementById('preview');
+
+fileInput.addEventListener('change',function(){
+const file=this.files[0];
+if(!file)return;
+
+if(!file.type.startsWith('video/')){
+alert('Selecciona un archivo de video.');
+return;
+}
+
+if(videoURL)URL.revokeObjectURL(videoURL);
+videoURL=URL.createObjectURL(file);
+preview.src=videoURL;
+preview.hidden=false;
+
+document.getElementById('videoInfo').textContent=
+'Video: '+file.name+' · '+(file.size/1024/1024).toFixed(1)+' MB';
+
+document.getElementById('status').textContent=
+'Video cargado correctamente.';
+
+preview.onloadedmetadata=function(){
+duration=preview.duration;
+document.getElementById('videoInfo').textContent=
+'Video: '+file.name+' · Duración: '+formatTime(duration);
+document.getElementById('analyze').disabled=false;
+};
+});
+
+function formatTime(seconds){
+const m=Math.floor(seconds/60);
+const s=Math.floor(seconds%60);
+return m+':'+String(s).padStart(2,'0');
+}
+
+function prepareClips(){
+if(!duration){
+alert('Primero selecciona un video.');
+return;
+}
+
+clipList=[];
+const count=Math.min(10,Math.max(1,Math.floor(duration/30)));
+const segment=duration/count;
+
+for(let i=0;i<count;i++){
+clipList.push({
+id:i+1,
+start:i*segment,
+end:Math.min((i+1)*segment,duration),
+state:'Pendiente'
+});
+}
+
+renderClips();
+document.getElementById('status').textContent=
+count+' propuestas de segmentos preparadas. Revisa cada una.';
+}
+
+function renderClips(){
+const container=document.getElementById('clips');
+container.innerHTML='';
+
+clipList.forEach((clip,index)=>{
+const div=document.createElement('div');
+div.className='clip';
+
+const title=document.createElement('b');
+title.textContent='Clip '+clip.id;
+div.appendChild(title);
+
+const time=document.createElement('p');
+time.textContent=formatTime(clip.start)+' – '+formatTime(clip.end);
+div.appendChild(time);
+
+const state=document.createElement('p');
+state.textContent=clip.state;
+state.className=clip.state==='Aprobado'?'approved':
+clip.state==='Rechazado'?'rejected':'small';
+div.appendChild(state);
+
+const approve=document.createElement('button');
+approve.textContent='APROBAR';
+approve.onclick=()=>updateClip(index,'Aprobado');
+
+const reject=document.createElement('button');
+reject.textContent='RECHAZAR';
+reject.className='secondary';
+reject.onclick=()=>updateClip(index,'Rechazado');
+
+div.appendChild(approve);
+div.appendChild(reject);
+container.appendChild(div);
+});
+}
+
+function updateClip(index,state){
+clipList[index].state=state;
+renderClips();
 }
 </script>
+
 </body>
 </html>
