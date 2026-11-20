@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -22,12 +21,13 @@ h2{font-size:17px;margin:0 0 14px}
 video{width:100%;max-height:420px;margin-top:15px;background:#000;border-radius:10px}
 button{background:#ff3030;color:white;border:0;padding:12px 16px;border-radius:8px;font-weight:bold;cursor:pointer}
 button:disabled{opacity:.4}
-input[type=number]{background:#222;border:1px solid #444;padding:12px;color:white;width:100%;border-radius:8px;margin:8px 0 15px}
-.status{color:#ff5555;font-size:13px;margin-top:12px}
+input[type=number],input[type=password]{background:#222;border:1px solid #444;padding:12px;color:white;width:100%;border-radius:8px;margin:8px 0 15px}
+.status{color:#ff5555;font-size:13px;margin-top:12px;white-space:pre-wrap}
 .clip{background:#202020;padding:15px;border-radius:10px;margin-top:12px;border-left:3px solid #ff3030}
 .clip.approved{border-color:#24c875}
 .clip.rejected{opacity:.45}
-.clip p{color:#aaa;font-size:13px}
+.clip p{color:#aaa;font-size:13px;line-height:1.5}
+.clip h3{margin:0 0 8px}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 .actions button{font-size:12px;padding:10px}
 .secondary{background:#333}
@@ -46,7 +46,7 @@ footer{text-align:center;color:#666;font-size:12px;padding:30px 5px}
 <label class="upload">
 <input type="file" id="videoFile" accept="video/*">
 <strong>＋ SELECCIONAR VIDEO</strong>
-<p class="desc">MP4, MOV y formatos compatibles</p>
+<p class="desc">MP4, MOV y formatos compatibles · Máximo 100 MB</p>
 </label>
 <video id="preview" controls playsinline hidden></video>
 <p id="videoInfo" class="status"></p>
@@ -55,13 +55,15 @@ footer{text-align:center;color:#666;font-size:12px;padding:30px 5px}
 <h2>02. Configuración</h2>
 <label for="maxClips">Máximo de clips (1 a 10)</label>
 <input type="number" id="maxClips" min="1" max="10" value="10">
-<p class="desc">Formato previsto: vertical 9:16<br>Publicación: manual, con tu aprobación.</p>
-<button id="prepare" disabled>PREPARAR PROPUESTAS DE CLIPS</button>
+<label for="accessCode">Código privado de acceso</label>
+<input type="password" id="accessCode" autocomplete="off" placeholder="Introduce tu código de acceso">
+<p class="desc">Formato objetivo: vertical 9:16<br>Publicación: manual, con tu aprobación. El código no se guarda en esta página.</p>
+<button id="prepare" disabled>ANALIZAR VIDEO CON IA</button>
 <p id="status" class="status">Esperando un video...</p>
 </section>
 <section class="card">
 <h2>03. Revisar clips</h2>
-<p class="desc">Aprueba o rechaza cada propuesta.</p>
+<p class="desc">Gemini propondrá momentos del video. Aprueba o rechaza cada propuesta.</p>
 <div id="results"><p class="desc">Todavía no hay propuestas.</p></div>
 </section>
 <section class="card">
@@ -69,13 +71,14 @@ footer{text-align:center;color:#666;font-size:12px;padding:30px 5px}
 <p id="summary" class="desc">Aprobados: 0 · Rechazados: 0</p>
 </section>
 </main>
-<footer>CLIP FACTORY AI · VERSIÓN 1.0</footer>
+<footer>CLIP FACTORY AI · VERSIÓN 1.1</footer>
 <script>
 const fileInput=document.getElementById("videoFile");
 const preview=document.getElementById("preview");
 const prepare=document.getElementById("prepare");
 const results=document.getElementById("results");
 const statusText=document.getElementById("status");
+const accessInput=document.getElementById("accessCode");
 let duration=0;
 let currentURL=null;
 let clips=[];
@@ -88,6 +91,8 @@ fileInput.addEventListener("change",()=>{
  preview.src=currentURL;
  preview.hidden=false;
  prepare.disabled=true;
+ clips=[];
+ results.innerHTML='<p class="desc">Todavía no hay propuestas.</p>';
  statusText.textContent="Cargando video...";
  document.getElementById("videoInfo").textContent=file.name;
  preview.onloadedmetadata=()=>{
@@ -97,9 +102,8 @@ fileInput.addEventListener("change",()=>{
    return;
   }
   prepare.disabled=false;
-  statusText.textContent="Video listo para preparar propuestas.";
-  document.getElementById("videoInfo").textContent=
-   file.name+" · "+formatTime(duration);
+  statusText.textContent="Video listo para analizar.";
+  document.getElementById("videoInfo").textContent=file.name+" · "+formatTime(duration);
  };
  preview.onerror=()=>{
   statusText.textContent="No se pudo abrir este formato de video.";
@@ -107,22 +111,48 @@ fileInput.addEventListener("change",()=>{
 });
 
 function formatTime(seconds){
- const s=Math.floor(seconds);
+ const s=Math.max(0,Math.floor(Number(seconds)||0));
  return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
 }
 
-prepare.addEventListener("click",()=>{
+prepare.addEventListener("click",async()=>{
+ const file=fileInput.files[0];
  const max=Math.min(10,Math.max(1,Number(document.getElementById("maxClips").value)||10));
- clips=[];
- const count=Math.min(max,Math.max(1,Math.ceil(duration/45)));
- const segment=duration/count;
- for(let i=0;i<count;i++){
-  const start=i*segment;
-  const end=Math.min(duration,(i+1)*segment);
-  clips.push({start,end,state:"pending"});
+ const accessCode=accessInput.value.trim();
+
+ if(!file){statusText.textContent="Selecciona un video primero.";return;}
+ if(!accessCode){statusText.textContent="Introduce tu código privado de acceso.";return;}
+ if(file.size>100*1024*1024){statusText.textContent="El video supera el límite de 100 MB.";return;}
+
+ prepare.disabled=true;
+ statusText.textContent="Enviando el video a Gemini. No cierres esta página...";
+ try{
+  const form=new FormData();
+  form.append("video",file,file.name);
+  form.append("maxClips",String(max));
+  const response=await fetch("https://clip-factory-engine.andiimanuel1105.workers.dev/analyze",{
+   method:"POST",
+   headers:{"X-Clip-Access-Code":accessCode},
+   body:form
+  });
+  const data=await response.json().catch(()=>({error:"El servidor devolvió una respuesta no válida."}));
+  if(!response.ok)throw new Error(data.error||("Error del servidor: "+response.status));
+  clips=(data.clips||[]).map(c=>({
+   start:Number(c.start_seconds),
+   end:Number(c.end_seconds),
+   title:c.title||"Momento interesante",
+   hook:c.hook||"",
+   reason:c.reason||"",
+   state:"pending"
+  })).filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.start>=0&&c.end>c.start);
+  if(!clips.length)throw new Error("Gemini no devolvió momentos válidos. Prueba con otro video.");
+  render();
+  statusText.textContent="¡Análisis completado! Revisa las propuestas.";
+ }catch(error){
+  statusText.textContent="No se pudo completar el análisis: "+(error.message||"Error desconocido");
+ }finally{
+  prepare.disabled=false;
  }
- render();
- statusText.textContent="Propuestas de referencia preparadas. Revisa cada segmento.";
 });
 
 function render(){
@@ -131,9 +161,20 @@ function render(){
   const item=document.createElement("div");
   item.className="clip "+(clip.state==="approved"?"approved":clip.state==="rejected"?"rejected":"");
   const heading=document.createElement("h3");
-  heading.textContent="Clip "+(index+1);
+  heading.textContent="Clip "+(index+1)+": "+clip.title;
   const info=document.createElement("p");
   info.textContent="Desde "+formatTime(clip.start)+" hasta "+formatTime(clip.end);
+  item.append(heading,info);
+  if(clip.hook){
+   const hook=document.createElement("p");
+   hook.textContent="Gancho: "+clip.hook;
+   item.append(hook);
+  }
+  if(clip.reason){
+   const reason=document.createElement("p");
+   reason.textContent="Por qué funciona: "+clip.reason;
+   item.append(reason);
+  }
   const state=document.createElement("p");
   state.textContent=clip.state==="approved"?"✓ Aprobado":clip.state==="rejected"?"Rechazado":"Pendiente de revisión";
   const actions=document.createElement("div");
@@ -143,26 +184,24 @@ function render(){
   play.textContent="VER MOMENTO";
   play.onclick=()=>{
    preview.currentTime=clip.start;
-   preview.play();
+   preview.play().catch(()=>{});
   };
   const approve=document.createElement("button");
   approve.textContent="APROBAR";
   approve.disabled=clip.state==="approved";
-  approve.onclick=()=>{clip.state="approved";render()};
+  approve.onclick=()=>{clip.state="approved";render();};
   const reject=document.createElement("button");
   reject.className="secondary";
   reject.textContent="RECHAZAR";
   reject.disabled=clip.state==="rejected";
-  reject.onclick=()=>{clip.state="rejected";render()};
+  reject.onclick=()=>{clip.state="rejected";render();};
   actions.append(play,approve,reject);
-  item.append(heading,info,state,actions);
+  item.append(state,actions);
   results.append(item);
  });
  const approved=clips.filter(c=>c.state==="approved").length;
  const rejected=clips.filter(c=>c.state==="rejected").length;
- document.getElementById("summary").textContent=
- "Aprobados: "+approved+" · Rechazados: "+rejected+
- " · Pendientes: "+(clips.length-approved-rejected);
+ document.getElementById("summary").textContent="Aprobados: "+approved+" · Rechazados: "+rejected+" · Pendientes: "+(clips.length-approved-rejected);
 }
 </script>
 </body>
