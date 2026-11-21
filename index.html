@@ -211,11 +211,7 @@ function render(){
   actions.append(play,approve,reject);
   item.append(state,actions);
  
-  reject.textContent="RECHAZAR";
-  reject.disabled=clip.state==="rejected";
-  reject.onclick=()=>{clip.state="rejected";render();};
-  actions.append(play,approve,reject);
-  item.append(state,actions);
+  
   results.append(item);
  });
  const approved=clips.filter(c=>c.state==="approved").length;
