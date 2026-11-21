@@ -210,43 +210,7 @@ function render(){
 
   actions.append(play,approve,reject);
   item.append(state,actions);
-  results.append(item);
- });
-
- const approved=clips.filter(c=>c.state==="approved").length;
- const rejected=clips.filter(c=>c.state==="rejected").length;
-
- document.getElementById("summary").textContent=
- "Aprobados: "+approved+" · Rechazados: "+rejected+
- " · Pendientes: "+(clips.length-approved-rejected);
-}
-
-   const hook=document.createElement("p");
-   hook.textContent="Gancho: "+clip.hook;
-   item.append(hook);
-  }
-  if(clip.reason){
-   const reason=document.createElement("p");
-   reason.textContent="Por qué funciona: "+clip.reason;
-   item.append(reason);
-  }
-  const state=document.createElement("p");
-  state.textContent=clip.state==="approved"?"✓ Aprobado":clip.state==="rejected"?"Rechazado":"Pendiente de revisión";
-  const actions=document.createElement("div");
-  actions.className="actions";
-  const play=document.createElement("button");
-  play.className="secondary";
-  play.textContent="VER MOMENTO";
-  play.onclick=()=>{
-   preview.currentTime=clip.start;
-   preview.play().catch(()=>{});
-  };
-  const approve=document.createElement("button");
-  approve.textContent="APROBAR";
-  approve.disabled=clip.state==="approved";
-  approve.onclick=()=>{clip.state="approved";render();};
-  const reject=document.createElement("button");
-  reject.className="secondary";
+ 
   reject.textContent="RECHAZAR";
   reject.disabled=clip.state==="rejected";
   reject.onclick=()=>{clip.state="rejected";render();};
