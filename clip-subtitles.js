@@ -370,10 +370,12 @@
     return lines.slice(0, 2);
   }
 
-  function drawFrame(ctx, canvas, video, segments, offset) {
+  function 
+drawFrame(ctx, canvas, video, segments, offset) {
     const width = canvas.width;
     const height = canvas.height;
 
+    // Mantener el video vertical sin deformarlo.
     if (video.videoWidth && video.videoHeight) {
       const scale = Math.max(
         width / video.videoWidth,
@@ -399,38 +401,86 @@
       time <= Number(segment.end)
     );
 
-    if (!active) return;
+    if (!active || !active.text) return;
 
-    ctx.font = "bold 54px Arial";
-    ctx.textAlign = "center";
+    // Estilo profesional de subtítulos.
+    ctx.save();
+
+    ctx.font = "900 46px Arial";
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
 
-    const lines = wrapText(ctx, active.text, 900);
-    const lineHeight = 68;
-    const boxHeight = lines.length * lineHeight + 44;
-    const boxY = height - 390;
+    const text = String(active.text).toLocaleUpperCase("es");
+    const lines = wrapText(ctx, text, 620);
 
-    ctx.fillStyle = "rgba(0,0,0,0.78)";
-    ctx.fillRect(
-      45,
-      boxY,
-      width - 90,
-      boxHeight
+    const lineHeight = 58;
+    const paddingX = 25;
+    const paddingY = 17;
+
+    const boxWidth = Math.min(
+      670,
+      Math.max(...lines.map(line => ctx.measureText(line).width)) + paddingX * 2
     );
 
-    ctx.fillStyle = "#ffffff";
+    const boxHeight = lines.length * lineHeight + paddingY * 2;
+
+    const boxX = (width - boxWidth) / 2;
+    const boxY = height - boxHeight - 190;
+
+    // Fondo negro redondeado uniforme.
+    ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
+    ctx.beginPath();
+
+    const radius = 18;
+    const right = boxX + boxWidth;
+    const bottom = boxY + boxHeight;
+
+    ctx.moveTo(boxX + radius, boxY);
+    ctx.lineTo(right - radius, boxY);
+    ctx.quadraticCurveTo(right, boxY, right, boxY + radius);
+    ctx.lineTo(right, bottom - radius);
+    ctx.quadraticCurveTo(right, bottom, right - radius, bottom);
+    ctx.lineTo(boxX + radius, bottom);
+    ctx.quadraticCurveTo(boxX, bottom, boxX, bottom - radius);
+    ctx.lineTo(boxX, boxY + radius);
+    ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Letras con contorno para máxima legibilidad.
+    ctx.lineWidth = 5;
     ctx.strokeStyle = "#000000";
-    ctx.lineWidth = 3;
 
     lines.forEach((line, index) => {
-      const y = boxY + 22 + lineHeight * index + lineHeight / 2;
+      const words = line.split(/\s+/);
+      const spaceWidth = ctx.measureText(" ").width;
 
-      ctx.strokeText(line, width / 2, y);
-      ctx.fillText(line, width / 2, y);
+      const widths = words.map(word => ctx.measureText(word).width);
+      const totalWidth =
+        widths.reduce((sum, value) => sum + value, 0) +
+        spaceWidth * (words.length - 1);
+
+      let x = (width - totalWidth) / 2;
+      const y = boxY + paddingY + lineHeight * index + lineHeight / 2;
+
+      words.forEach((word, wordIndex) => {
+        ctx.strokeText(word, x, y);
+
+        // Primera palabra resaltada en amarillo.
+        ctx.fillStyle =
+          index === 0 && wordIndex === 0
+            ? "#FFD400"
+            : "#FFFFFF";
+
+        ctx.fillText(word, x, y);
+        x += widths[wordIndex] + spaceWidth;
+      });
     });
-  }
 
-  async function captureSubtitledVideo(file, start, end, segments) {
+    ctx.restore();
+  }
+async function captureSubtitledVideo(file, start, end, segments) {
     const video = makeVideo(file);
 
     try {
