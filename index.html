@@ -155,17 +155,72 @@ prepare.addEventListener("click",async()=>{
  }
 });
 
+
 function render(){
  results.innerHTML="";
+
  clips.forEach((clip,index)=>{
+  const start = clip.start ?? clip.start_seconds ?? 0;
+  const end = clip.end ?? clip.end_seconds ?? 0;
+
   const item=document.createElement("div");
   item.className="clip "+(clip.state==="approved"?"approved":clip.state==="rejected"?"rejected":"");
+
   const heading=document.createElement("h3");
-  heading.textContent="Clip "+(index+1)+": "+clip.title;
+  heading.textContent="Clip "+(index+1)+": "+(clip.title || "Sin título");
+
   const info=document.createElement("p");
-  info.textContent="Desde "+formatTime(clip.start)+" hasta "+formatTime(clip.end);
+  info.textContent="Desde "+formatTime(start)+" hasta "+formatTime(end);
   item.append(heading,info);
+
   if(clip.hook){
+   const hook=document.createElement("p");
+   hook.textContent="Gancho: "+clip.hook;
+   item.append(hook);
+  }
+
+  if(clip.reason){
+   const reason=document.createElement("p");
+   reason.textContent="Por qué funciona: "+clip.reason;
+   item.append(reason);
+  }
+
+  const state=document.createElement("p");
+  state.textContent=clip.state==="approved"?"✓ Aprobado":clip.state==="rejected"?"Rechazado":"Pendiente de revisión";
+
+  const actions=document.createElement("div");
+
+  const play=document.createElement("button");
+  play.textContent="VER MOMENTO";
+  play.onclick=()=>{
+   preview.currentTime=start;
+   preview.play().catch(()=>{});
+  };
+
+  const approve=document.createElement("button");
+  approve.textContent="APROBAR";
+  approve.disabled=clip.state==="approved";
+  approve.onclick=()=>{clip.state="approved";render();};
+
+  const reject=document.createElement("button");
+  reject.className="secondary";
+  reject.textContent="RECHAZAR";
+  reject.disabled=clip.state==="rejected";
+  reject.onclick=()=>{clip.state="rejected";render();};
+
+  actions.append(play,approve,reject);
+  item.append(state,actions);
+  results.append(item);
+ });
+
+ const approved=clips.filter(c=>c.state==="approved").length;
+ const rejected=clips.filter(c=>c.state==="rejected").length;
+
+ document.getElementById("summary").textContent=
+ "Aprobados: "+approved+" · Rechazados: "+rejected+
+ " · Pendientes: "+(clips.length-approved-rejected);
+}
+
    const hook=document.createElement("p");
    hook.textContent="Gancho: "+clip.hook;
    item.append(hook);
